@@ -2,6 +2,7 @@ package com.github.websend;
 
 import com.github.websend.post.POSTHandlerThreadPool;
 import com.github.websend.post.POSTRequest;
+import com.github.websend.post.POSTRequest.ReqTypes;
 import com.github.websend.script.ScriptManager;
 import com.github.websend.server.CommunicationServer;
 import com.github.websend.server.NonSecureCommunicationServer;
@@ -9,6 +10,7 @@ import com.github.websend.server.SecureCommunicationServer;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
 import java.util.logging.Level;
@@ -24,7 +26,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class Main extends JavaPlugin {
     private static Settings settings;
-    private static Logger logger;
+    public static Logger logger;
     private static Server bukkitServer;
     private static Main plugin;
     private static File scriptsDir;
@@ -41,6 +43,37 @@ public class Main extends JavaPlugin {
         plugin = this;
         port = this.getServer().getPort();
 
+        LoadingSettings();
+
+        // Setup webrequest thread pool
+        Main.logDebugInfo("Loading POST handler pool.");
+        requestThreadPool = new POSTHandlerThreadPool();
+
+        // Setup scripts
+        Main.logDebugInfo("Loading scripts.");
+        scriptsDir = new File(this.getDataFolder(), "scripts");
+        scriptManager = new ScriptManager();
+        if (scriptsDir.exists()) {
+            scriptManager.loadScripts();
+        } else {
+            if (!new File(scriptsDir, "compiled").mkdirs()) {
+                Main.logger.log(Level.WARNING, "Failed to make scripts directory.");
+            }
+        }
+        // Start server
+        if (settings.isServerActive()) {
+            if (settings.isSSLEnabled()) {
+                Main.logDebugInfo("Loading secure webrequest server on port " + settings.getPort() + ".");
+                server = new SecureCommunicationServer();
+            } else {
+                Main.logDebugInfo("Loading regular webrequest server on port " + settings.getPort() + ".");
+                server = new NonSecureCommunicationServer();
+            }
+            server.start();
+        }
+    }
+
+    private void LoadingSettings() {
         // Parse config
         ConfigHandler configHandler = new ConfigHandler();
         try {
@@ -67,25 +100,25 @@ public class Main extends JavaPlugin {
             logger.log(Level.SEVERE, "Failed to load trusted hosts file", ex);
         }
 
-        //Setup SSL keystore
-        if(settings.isSSLEnabled()){
+        // Setup SSL keystore
+        if (settings.isSSLEnabled()) {
             Main.logDebugInfo("Loading SSL settings.");
-            if(settings.getSSLPassword() == null){
+            if (settings.getSSLPassword() == null) {
                 Main.logger.log(Level.WARNING, "SSL password is not set in configuration. Connections are INSECURE.");
-            }else{
-                if(System.getProperty("javax.net.ssl.keyStore") != null){
+            } else {
+                if (System.getProperty("javax.net.ssl.keyStore") != null) {
                     Main.logger.log(Level.WARNING, "javax.net.ssl.keyStore is already set. "
                             + "Websend will override it, but this may introduce unexpected behaviour in other plugins.");
-                }else if(System.getProperty("javax.net.ssl.keyStorePassword") != null){
+                } else if (System.getProperty("javax.net.ssl.keyStorePassword") != null) {
                     Main.logger.log(Level.WARNING, "javax.net.ssl.keyStorePassword is already set. "
                             + "Websend will override it, but this may introduce unexpected behaviour in other plugins.");
                 }
                 try {
                     File certFile = new File(this.getDataFolder(), "websendKeyStore");
-                    if(certFile.exists()){
+                    if (certFile.exists()) {
                         System.setProperty("javax.net.ssl.keyStore", certFile.getCanonicalPath());
                         System.setProperty("javax.net.ssl.keyStorePassword", settings.getSSLPassword());
-                    }else{
+                    } else {
                         Main.logger.log(Level.WARNING, "No SSL keystore found. Connections are INSECURE.");
                     }
                 } catch (IOException ex) {
@@ -95,33 +128,7 @@ public class Main extends JavaPlugin {
             }
         }
 
-         //Setup webrequest thread pool
-        Main.logDebugInfo("Loading POST handler pool.");
-        requestThreadPool = new POSTHandlerThreadPool();
 
-        // Setup scripts
-        Main.logDebugInfo("Loading scripts.");
-        scriptsDir = new File(this.getDataFolder(), "scripts");
-        scriptManager = new ScriptManager();
-        if (scriptsDir.exists()) {
-            scriptManager.loadScripts();
-        } else {
-            if (!new File(scriptsDir, "compiled").mkdirs()) {
-                Main.logger.log(Level.WARNING, "Failed to make scripts directory.");
-            }
-        }
-
-        // Start server
-        if (settings.isServerActive()) {
-            if(settings.isSSLEnabled()){
-                Main.logDebugInfo("Loading secure webrequest server on port "+settings.getPort()+".");
-                server = new SecureCommunicationServer();
-            }else{
-                Main.logDebugInfo("Loading regular webrequest server on port "+settings.getPort()+".");
-                server = new NonSecureCommunicationServer();
-            }
-            server.start();
-        }
     }
 
     @Override
@@ -143,8 +150,51 @@ public class Main extends JavaPlugin {
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+        boolean jsonExtra = false;
         if(!this.isEnabled()){
             logger.log(Level.SEVERE, "Websend is disabled. Restart the server to run commands.");
+        } else if (cmd.getName().equalsIgnoreCase("websend_php")) {
+            URL url = Main.getSettings().getURL();
+            if (args.length > 1 ) {
+                if(args[0].toLowerCase() == "jsonextra"){
+                    jsonExtra = true;
+                }
+            }
+            if (sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender || sender instanceof BlockCommandSender) {
+                POSTRequest request = new POSTRequest(url, args, null, false, ReqTypes.PhpSend, jsonExtra);
+                requestThreadPool.doRequest(request);
+                return true;
+            } else if (sender instanceof Player) {
+                Player plsender = (Player) sender;
+                if (plsender.hasPermission("websend")) {
+                    POSTRequest request = new POSTRequest(url, args, plsender, false, ReqTypes.PhpSend, jsonExtra);
+                    requestThreadPool.doRequest(request);
+                    return true;
+                } else {
+                    plsender.sendMessage("You are not allowed to use this command.");
+                }
+            }
+        } else if (cmd.getName().equalsIgnoreCase("websend_json")) {
+            URL url = Main.getSettings().getURL();
+            if (args.length > 1 ) {
+                if(args[0].toLowerCase() == "jsonextra"){
+                    jsonExtra = true;
+                }
+            }
+            if (sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender || sender instanceof BlockCommandSender) {
+                POSTRequest request = new POSTRequest(url, args, null, false, ReqTypes.JSONString, jsonExtra);
+                requestThreadPool.doRequest(request);
+                return true;
+            } else if (sender instanceof Player) {
+                Player plsender = (Player) sender;
+                if (plsender.hasPermission("websend")) {
+                    POSTRequest request = new POSTRequest(url, args, plsender, false, ReqTypes.JSONString, jsonExtra);
+                    requestThreadPool.doRequest(request);
+                    return true;
+                } else {
+                    plsender.sendMessage("You are not allowed to use this command.");
+                }
+            }
         } else if (cmd.getName().equalsIgnoreCase("websend") || cmd.getName().equalsIgnoreCase("ws")) {
             URL url = Main.getSettings().getURL();
             if (sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender || sender instanceof BlockCommandSender) {
@@ -162,6 +212,29 @@ public class Main extends JavaPlugin {
                             }
                         }
                     }
+                    if (args[0].contains("-seturl:")) {
+                        if (plsender.isOp() && args.length > 1) {
+                            try {
+                                Main.getSettings().setURL(new URL(args[1]));
+                            } catch (MalformedURLException e) {
+                                e.printStackTrace();
+                            }
+                            url = Main.getSettings().getURL();
+                        }
+                        plsender.sendMessage("Url set to: " +args[1]);
+                        return true;
+                    }
+                    if (args[0].contains("-reload:")) {
+                        Main.logDebugInfo("Reloading Config Settings ");
+                        plsender.sendMessage("Reloading Config Settings.");
+                        //Fix Websend] Server encountered an error. Attempting restart. java.net.BindException: Address already in use: bind
+                        // if (server != null) {
+                        //     server.stopServer();
+                        // }
+                        LoadingSettings();
+                        return true;
+                    }
+
                     POSTRequest request = new POSTRequest(url, args, plsender, false);
                     requestThreadPool.doRequest(request);
                     return true;

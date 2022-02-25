@@ -175,7 +175,13 @@ public class ConfigHandler {
                     settings.setSSLEnabled(false);
                     Main.logDebugInfo(Level.INFO, "Config read: SS: is set to OFF");
                 }
-
+            } else if (line.startsWith("JSON_EXTRA=")) {
+                String value = line.replaceFirst("JSON_EXTRA=", "");
+                if (value.toLowerCase().trim().contains("true")) {
+                    settings.setJsonExtra(true);
+                }else{
+                    settings.setJsonExtra(false);
+                }
             } else if (line.startsWith("SSL_PASS=")) {
                 String value = line.replaceFirst("SSL_PASS=", "");
                 settings.setSslPassword(value);

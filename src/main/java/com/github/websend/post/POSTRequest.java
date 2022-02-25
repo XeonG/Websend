@@ -32,6 +32,7 @@ public class POSTRequest {
     private final URL url;
     private String jsonData;
     private Player player;
+    private boolean jsonExtra = false;
 
     public POSTRequest(URL url, String args[], Player player, boolean isResponse) {
         this.player = player;
@@ -71,6 +72,57 @@ public class POSTRequest {
         }
         this.url = url;
     }
+
+    public enum ReqTypes {
+        JSONString,
+        PhpSend
+    }
+
+    public POSTRequest(URL url, String args[], Player player, boolean isResponse, ReqTypes ReqType, boolean _jsonExtra) {
+        String playerNameArg = "@Console";
+        if(player!= null){
+            playerNameArg = player.getDisplayName();
+        }
+        Main.logger.info("URL: "+ url +", playerNameArg: "+playerNameArg +",  isResponse:  "+isResponse  +", ReqTypes: "+ReqType);
+        if (args.length == 0) {
+            Main.getMainLogger().info("POSTRequest ERROR: You need to pass arguments with /ws and /websend!");
+        } else {
+            Main.logDebugInfo("POSTRequest: Executing commands by player " + playerNameArg + " with arguments '" + String.join("', '", args) + "'");
+        }
+          //Override jsonExtra config settings if the first arg is jsonextra.
+        // jsonExtra = Main.getSettings().getJsonExtra();
+        jsonExtra = _jsonExtra;
+        int arrayIncr = 0;
+        if (_jsonExtra) {
+            arrayIncr++;
+        }
+        content.add(new BasicNameValuePair("isResponse", Boolean.toString(isResponse)));
+        content.add(new BasicNameValuePair("authKey", Util.hash(Main.getSettings().getPassword())));
+        content.add(new BasicNameValuePair("isCompressed", Boolean.toString(Main.getSettings().areRequestsGZipped())));
+
+        jsonData = getJSONDataString(player, playerNameArg);
+        // if(splitKeyValue){
+        //     for (int i = arrayIncr; i < args.length; i++) {
+        //         content.add(new BasicNameValuePair("args[" + ((arrayDec == -1) ? i-arrayDec : i) + "]", args[i]));
+        //     }
+        // }
+        if(ReqType == ReqTypes.PhpSend){
+            for (int i = arrayIncr; i < args.length; i++) {
+                String parts[] =  args[i].split("=");
+                //content.add(new BasicNameValuePair("args[" + parts[0] + "]",parts[1]));
+                content.add(new BasicNameValuePair(parts[0],parts[1]));
+            }
+        }
+        if(ReqType == ReqTypes.JSONString){
+            StringBuilder argString = new StringBuilder();
+            for (int i = arrayIncr; i < args.length; i++) {
+                argString.append(args[i]+" ");
+            }
+            content.add(new BasicNameValuePair("json[" + 0 + "]", argString.toString().trim()));
+        }
+        this.url = url;
+    }
+
 
     public void run(HttpClient httpClient) throws IOException {
         HttpResponse response = doRequest(httpClient);
@@ -164,42 +216,44 @@ public class POSTRequest {
                 data.put("Invoker", jsonPlayer);
             }
 
-            JSONArray plugins = new JSONArray();
-            for (Plugin plugin : server.getPluginManager().getPlugins()) {
-                JSONObject plug = new JSONObject();
-                plug.put("Name", plugin.getDescription().getFullName());
-                plugins.put(plug);
-            }
-            data.put("Plugins", plugins);
-
-            JSONObject serverSettings = new JSONObject();
-            {
-                serverSettings.put("Name", server.getName());
-                serverSettings.put("Build", server.getVersion());
-                serverSettings.put("Port", server.getPort());
-                serverSettings.put("NetherEnabled", server.getAllowNether());
-                serverSettings.put("FlyingEnabled", server.getAllowFlight());
-                serverSettings.put("DefaultGameMode", server.getDefaultGameMode());
-                serverSettings.put("OnlineMode", server.getOnlineMode());
-                serverSettings.put("MaxPlayers", server.getMaxPlayers());
-            }
-            data.put("ServerSettings", serverSettings);
-
-            JSONObject serverStatus = new JSONObject();
-            {
-                JSONArray onlinePlayers = new JSONArray();
-                {
-                    for (Player cur : server.getOnlinePlayers()) {
-                        boolean extendedData = Main.getSettings().isExtendedPlayerDataEnabled();
-                        JSONObject curPlayer = JSONSerializer.getInstance().serializePlayer(cur, extendedData);
-                        onlinePlayers.put(curPlayer);
-                    }
+            if(jsonExtra){
+                JSONArray plugins = new JSONArray();
+                for (Plugin plugin : server.getPluginManager().getPlugins()) {
+                    JSONObject plug = new JSONObject();
+                    plug.put("Name", plugin.getDescription().getFullName());
+                    plugins.put(plug);
                 }
-                serverStatus.put("OnlinePlayers", onlinePlayers);
-                serverStatus.put("AvailableMemory", Runtime.getRuntime().freeMemory());
-                serverStatus.put("MaxMemory", Runtime.getRuntime().maxMemory());
+                data.put("Plugins", plugins);
+
+                JSONObject serverSettings = new JSONObject();
+                {
+                    serverSettings.put("Name", server.getName());
+                    serverSettings.put("Build", server.getVersion());
+                    serverSettings.put("Port", server.getPort());
+                    serverSettings.put("NetherEnabled", server.getAllowNether());
+                    serverSettings.put("FlyingEnabled", server.getAllowFlight());
+                    serverSettings.put("DefaultGameMode", server.getDefaultGameMode());
+                    serverSettings.put("OnlineMode", server.getOnlineMode());
+                    serverSettings.put("MaxPlayers", server.getMaxPlayers());
+                }
+                data.put("ServerSettings", serverSettings);
+
+                JSONObject serverStatus = new JSONObject();
+                {
+                    JSONArray onlinePlayers = new JSONArray();
+                    {
+                        for (Player cur : server.getOnlinePlayers()) {
+                            boolean extendedData = Main.getSettings().isExtendedPlayerDataEnabled();
+                            JSONObject curPlayer = JSONSerializer.getInstance().serializePlayer(cur, extendedData);
+                            onlinePlayers.put(curPlayer);
+                        }
+                    }
+                    serverStatus.put("OnlinePlayers", onlinePlayers);
+                    serverStatus.put("AvailableMemory", Runtime.getRuntime().freeMemory());
+                    serverStatus.put("MaxMemory", Runtime.getRuntime().maxMemory());
+                }
+                data.put("ServerStatus", serverStatus);
             }
-            data.put("ServerStatus", serverStatus);
         }
         return data.toString();
     }

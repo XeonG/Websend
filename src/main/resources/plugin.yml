@@ -8,19 +8,27 @@ commands:
    websend:
       description: Starts communication.
       usage: |
-              /<command> <arguments>
+            /<command> <arguments>
+   websend_php:
+      description: Starts communication for json.
+      usage: |
+            /<command> <arguments>
+   websend_json:
+      description: Starts communication for json.
+      usage: |
+            /<command> <arguments>
    ws:
       description: Starts communication.
       usage: |
-              /<command> <arguments>
+            /<command> <arguments>
    wsScripts:
       description: Scripts
       usage: |
-              /<command> <arguments>
+            /<command> <arguments>
 permissions:
-    websend:
-        description: Allows you to use websend
-        default: op
-    websend.scripts:
-        description: Allows you to perform /wsScripts
-        default: op
+   websend:
+      description: Allows you to use websend
+      default: op
+   websend.scripts:
+      description: Allows you to perform /wsScripts
+      default: op

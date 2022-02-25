@@ -19,7 +19,8 @@ public class Settings {
     private boolean sslEnabled = false;
     private String sslPassword = null;
     private boolean extendedPlayerDataEnabled;
-    
+    private boolean jsonExtra;
+
     public URL getURL() {
         return URL;
     }
@@ -119,7 +120,7 @@ public class Settings {
     public boolean isExtendedPlayerDataEnabled() {
         return extendedPlayerDataEnabled;
     }
-    
+
     public void setExtendedPlayerDataEnabled(boolean enabled){
         this.extendedPlayerDataEnabled = enabled;
     }
@@ -129,5 +130,13 @@ public class Settings {
 
     public void setSslPassword(String sslPassword) {
         this.sslPassword = sslPassword;
+    }
+
+    public void setJsonExtra(boolean enabled) {
+        this.jsonExtra = enabled;
+    }
+
+    public boolean getJsonExtra() {
+        return jsonExtra;
     }
 }
