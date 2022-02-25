@@ -10,7 +10,7 @@
             <id>spigot-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
-    </repositories>    
+    </repositories>
     <dependencies>
         <dependency>
             <groupId>commons-logging</groupId>
@@ -53,13 +53,13 @@
             <scope>test</scope>
             <type>jar</type>
         </dependency>
-        <dependency>
+        <!-- <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>
             <version>1.17-SNAPSHOT</version>
             <scope>system</scope>
             <systemPath>${user.home}/.m2/repository/org/spigotmc/spigot/1.17-R0.1-SNAPSHOT/spigot-1.17-R0.1-SNAPSHOT.jar</systemPath>
-        </dependency>
+        </dependency> -->
     </dependencies>
     <properties>
         <mainClass>project.Main.class</mainClass>
